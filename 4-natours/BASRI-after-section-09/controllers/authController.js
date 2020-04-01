@@ -15,7 +15,8 @@ const signup = catchAsync(async (req, res, next) => {
     name: req.body.name,
     email: req.body.email,
     password: req.body.password,
-    passwordConfirm: req.body.passwordConfirm
+    passwordConfirm: req.body.passwordConfirm,
+    role: req.body.role
   });
 
   const token = signToken(newUser._id);
@@ -48,8 +49,6 @@ const login = catchAsync(async (req, res, next) => {
   });
 });
 
-const testingBasri = data => console.log(data);
-
 const protect = catchAsync(async (req, res, next) => {
   //1. getting token and checking if it exists
   let token;
@@ -63,14 +62,33 @@ const protect = catchAsync(async (req, res, next) => {
     return next(new AppError('you are not logged in. please login', 401));
   }
   //2. verification of the token
-    const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
-    // let decoded;
-//   const decoded = jwt.verify(token, process.env.JWT_SECRET);
-  console.log(decoded);
-  //3. veruification that user still exists
+  const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
 
+  //   const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+  //3. verification that user still exists
+  const currentUser = await User.findById(decoded.id);
+  if (!currentUser) {
+    return next(
+      new AppError('the user belonging to this token no longer exists', 401)
+    );
+  }
   //4.chevl if user changed password after the token was issued
+
+  // GRANT ACCESS!
+  req.user = currentUser;
   next();
 });
 
-module.exports = { signup, login, protect };
+const restrictTo = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return next(
+        new AppError('you do not have permission to perform this action', 403)
+      );
+    }
+    next();
+  };
+};
+
+module.exports = { signup, login, protect, restrictTo };
